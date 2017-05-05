@@ -2,7 +2,9 @@ import sys
 import math
 import pandas 
 import numpy as np
-
+# Original Metrics code by Peter Kruczkiewicz (https://github.com/peterk87)
+#National Microbiology Laboratory at Lethbridge, Public Health Agency of Canada, Lethbridge, Alberta, Canada. 
+# https://gist.github.com/jacarrico/82c32d05e90f43dec2b446cdb1ed46c6
 def getContTable(ar1, ar2):
     cont = {}
     for i in xrange(0, len(ar1)):
@@ -121,25 +123,18 @@ def getAdjustedWallace(cont, ar1, ar2):
     sumCol, sumRow, totals = getContTableTotals(cont, ar1, ar2)
     rSumW1 = 0
     rSumW2 = 0
-    csumFc2 = {}
-    csumFc3 = {}
+    # For Rows
     for i in cont:
         rSum = sumRow[i]
         rsumFc2 = 0
         rsumFc3 = 0
         for j in cont[i]:
             val = cont[i][j]
+            #print 'i',i,'j',j,'val',val
             cSum = sumCol[j]
             rsumFc2 += (val / float(rSum)) ** 2.0
             rsumFc3 += (val / float(rSum)) ** 3.0
-            if j in csumFc2:
-                csumFc2[j] += (val / float(cSum)) ** 2.0
-            else:
-                csumFc2[j] = (val / float(cSum)) ** 2.0
-            if j in csumFc3:
-                csumFc3[j] += (val / float(cSum)) ** 3.0
-            else:
-                csumFc3[j] = (val / float(cSum)) ** 3.0
+
         rsqrsumFc2 = rsumFc2 ** 2.0
         rvarSID = 0.0
         if rSum > 1:
@@ -147,133 +142,60 @@ def getAdjustedWallace(cont, ar1, ar2):
         rSumW1 += float((rSum * (rSum - 1.0)) ** 2.0) * rvarSID
         rSumW2 += rSum * (rSum - 1.0)
 
-    csumw1 = 0
-    csumW2 = 0
-
-    for j in sumCol:
-        cSum = sumCol[j]
-        fc2 = csumFc2[j]
-        fc3 = csumFc3[j]
-        csqrsumFc2 = fc2 ** 2.0
-        cvarSID = 0.0
-        if cSum > 1:
-            # (4*sumcol[j]*(sumcol[j]-1)*(sumcol[j]-2)*csumFc3[j]+2*sumcol[j]*(sumcol[j]-1)*csumFc2[j]-2*sumcol[j]*(sumcol[j]-1)*(2*sumcol[j]-3)*csqrsumFc2[j])/sqr(sumcol[j]*(sumcol[j]-1));
-            cvarSID = float(4.0 * cSum * (cSum - 1.0) * (cSum - 2.0) * fc3 + 2.0 * cSum * (cSum - 1.0) * fc2 - 2.0 * cSum * (cSum - 1.0) * (2.0 * cSum - 3.0) * csqrsumFc2) / float((cSum * (cSum - 1.0)) ** 2.0)
-            #print cvarSID
-        csumw1 += (cSum * (cSum - 1.0) * cvarSID) ** 2.0
-        csumW2 += cSum * (cSum - 1.0)
-    #print "csumW2=%f" % csumW2
     varW1 = 0.0
-    varW2 = 0.0
     if rSumW2 > 0:
         varW1 = float(rSumW1 / float(float(rSumW2) ** 2.0))
-    if csumW2 > 0:
-        varW2 = float(csumw1 / float(float(csumW2) ** 2.0))
-    #print "varW1=%f" % varW1
-    #print "varW2=%f" % varW2
+
+    csumw1 = 0
+    csumW2 = 0
+  
+
     a, b, c, d, n = getMismatchMatrix(cont, ar1, ar2)
     w1, w2 = getWallace(a, b, c)
+    
     sid1 = getSimpsons(ar1)
     sid2 = getSimpsons(ar2)
+    
     wi1 = 1 - sid1[0]
     wi2 = 1 - sid2[0]
+    
     aw1 = float(w1 - wi2) / float(1 - wi2)
-    aw2 = float(w2 - wi1) / float(1 - wi1)
     
     aw1CI = 2.0 * (1.0 / float(1.0 - wi2)) * math.sqrt(varW1)
     aw1Low = aw1 - aw1CI
     aw1High = aw1 + aw1CI
-    
-    aw2CI = 2.0 * (1.0 / float(1.0 - wi1)) * math.sqrt(varW2)
-    #print "wi1=%f" % wi1
-    #print "aw2CI=%f" % aw2CI
-    aw2Low = aw2 - aw2CI
-    aw2High = aw2 + aw2CI
-    return (aw1, aw1Low, aw1High, aw2, aw2Low, aw2High)
+    return (aw1, aw1Low, aw1High)
 
 
 print len(sys.argv)  
 if len(sys.argv) == 2:
     filename  = sys.argv[1]
     data = pandas.read_table(filename)
-    
-    ncols = len(data.columns) 
-
     for col1 in data.columns:
-        #print i
         for col2 in data.columns:
-            #print j
             if col1 != col2:
                 print "===========",col1,"=",col2,"============"
-                #print data[col2]
                 icol = data[col1].values.tolist()
                 jcol = data[col2].values.tolist()
-                # print y
-                #print "================="
-                # print icol
-                # print "================="
-                # print jcol
-                # print "================="
-
                 cont = getContTable(icol, jcol)
-
-                #print cont
-                #sys.exit()
+                cont_2 = getContTable(jcol, icol)
                 abcdn = getMismatchMatrix(cont, icol, jcol)
+                abcdn_2 = getMismatchMatrix(cont_2, jcol, icol)
                 #print "Rand\t%f" % getRand(abcdn[0], abcdn[1], abcdn[2], abcdn[3])
-                wallace = getWallace(abcdn[0], abcdn[1], abcdn[2])
-                print "Wallace 1vs2\t%f" % wallace[0]
-                print "Wallace 2vs1\t%f" % wallace[1]
+
                 sid1 = getSimpsons(icol)
-                sid2 = getSimpsons(jcol)
-                #print sid1
-                print "Simpsons 1\t%f\t%f\t%f\t%d" % sid1
-                print "Simpsons 2\t%f\t%f\t%f\t%d" % sid2
-                #sys.exit()
+                sid2 = getSimpsons(jcol)      
+                print "Simpsons ",col1,"\t%f\t%f\t%f\t%d" % sid1
+                print "Simpsons ",col2,"\t%f\t%f\t%f\t%d" % sid2
+                print "\n"
+                wallace = getWallace(abcdn[0], abcdn[1], abcdn[2])
+                print "Wallace ",col1,"vs ",col2,"\t%f" % wallace[0]
+                print "Wallace ",col2,"vs",col1,"\t%f" % wallace[1]
+                print "\n"
                 AdjustedWallace = getAdjustedWallace(cont, icol, jcol)
-                print "Adjusted Wallace 1vs2\t%f\t%f\t%f" % AdjustedWallace[0:3]
-                print "Adjusted Wallace 2vs1\t%f\t%f\t%f" % AdjustedWallace[3:6] # STILL BROKEN #FIXIT
+                AdjustedWallace_2 = getAdjustedWallace(cont_2, jcol, icol)
 
-#else:
-#    print """
-# Please specify target file for comparisons
+                print "Adjusted Wallace ",col1,"vs ",col2,"\t%f\t%f\t%f" % AdjustedWallace
+                print "Adjusted Wallace ",col2,"vs",col1,"\t%f\t%f\t%f" % AdjustedWallace_2 
+                print "\n"
 
-# Output:
-
-# Simpson's index of diversity
-# Wallace coefficient 1vs2
-# Wallace coefficient 2vs1
-# Adjusted Wallace coefficient 1vs2
-# Adjusted wallace coefficient 2vs1
-
-
-    """
-
-
-# if len(sys.argv) == 3:
-#     array1 = sys.argv[1]
-#     array2 = sys.argv[2]
-#     x = array1.split(",")
-#     # print x
-#     y = array2.split(",")
-#     # print y
-#     cont = getContTable(x, y)
-#     abcdn = getMismatchMatrix(cont, x, y)
-#     print "Rand\t%f" % getRand(abcdn[0], abcdn[1], abcdn[2], abcdn[3])
-#     wallace = getWallace(abcdn[0], abcdn[1], abcdn[2])
-#     print "Wallace 1vs2\t%f" % wallace[0]
-#     print "Wallace 2vs1\t%f" % wallace[1]
-#     sid1 = getSimpsons(x)
-#     sid2 = getSimpsons(y)
-#     print "Simpsons 1\t%f\t%f\t%f\t%d" % sid1
-#     print "Simpsons 2\t%f\t%f\t%f\t%d" % sid2
-#     print getAdjustedWallace(cont, x, y)
-# else:
-#     print """
-# Please specify 2 lists of clusters delimited by commas ','
-# Output:
-# Rand coefficient
-# Wallace coefficient 1vs2
-# Wallace coefficient 2vs1
-# Simpson's index of diversity
-#     """
